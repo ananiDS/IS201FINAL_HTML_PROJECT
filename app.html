@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Triangle Rush</title>
+    <style>
+        :root {
+            --primary: #00f3ff;
+            --danger: #ff0055;
+            --coin: #ffd700;
+            --grid: rgba(255, 255, 255, 0.1);
+            --bg: #050510;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            touch-action: none; /* Prevent browser zooming/scrolling */
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        /* UI Overlays */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 0 0 5px var(--primary);
+        }
+
+        .hud-bottom {
+            pointer-events: auto;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid var(--grid);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            backdrop-filter: blur(5px);
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+        }
+
+        /* Menus */
+        .menu-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 10;
+            backdrop-filter: blur(8px);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: var(--primary);
+            text-transform: uppercase;
+            text-shadow: 0 0 10px var(--primary);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        button {
+            background: transparent;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-family: inherit;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+        }
+
+        button:hover {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 20px var(--primary);
+        }
+
+        input[type="range"] {
+            width: 100px;
+            accent-color: var(--primary);
+        }
+
+        input[type="text"] {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--primary);
+            color: white;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 1.2rem;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .hidden { display: none !important; }
+
+        .score-list {
+            max-height: 150px;
+            overflow-y: auto;
+            width: 80%;
+            text-align: left;
+            border: 1px solid var(--grid);
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .score-row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 5px 0;
+        }
+
+        /* Top Controls Container */
+        .top-controls {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 5;
+            pointer-events: none; /* Let clicks pass through gaps */
+        }
+
+        #pause-btn, #dashboard-btn {
+            position: static; /* Reset absolute positioning */
+            padding: 5px 15px;
+            font-size: 1rem;
+            pointer-events: auto; /* Enable clicks */
+            margin: 0;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Top Controls (Centered) -->
+    <div class="top-controls">
+        <button id="dashboard-btn" class="hidden">DASHBOARD</button>
+        <button id="pause-btn" class="hidden">PAUSE</button>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="start-screen" class="menu-screen">
+        <h1>Neon Triangle<br>Rush</h1>
+        <p>Avoid Red Blocks. Collect Gold Coins.</p>
+        <p>Time Limit: 60s</p>
+        <button id="start-btn">Start Game</button>
+        <div class="score-list" id="high-score-display"></div>
+    </div>
+
+    <!-- Game Over / High Score Input -->
+    <div id="game-over-screen" class="menu-screen hidden">
+        <h1 id="go-title">Time's Up!</h1>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <div id="new-record-section" class="hidden">
+            <p style="color: var(--coin)">NEW HIGH SCORE!</p>
+            <input type="text" id="player-name" placeholder="Enter Name" maxlength="10">
+            <button id="save-score-btn">Save Record</button>
+        </div>
+        <div id="normal-end-section">
+            <button id="restart-btn">Try Again</button>
+        </div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud" class="ui-layer hidden">
+        <div class="hud-top">
+            <div>SCORE: <span id="score-val">0</span></div>
+            <div>TIME: <span id="time-val">60</span></div>
+        </div>
+        
+        <div class="hud-bottom hidden" id="game-dashboard">
+            <div class="control-row">
+                <span>SPEED DASHBOARD</span>
+            </div>
+            <div class="control-row">
+                <label>Game Speed:</label>
+                <input type="range" id="speed-slider" min="0.8" max="2.0" step="0.1" value="1.0">
+            </div>
+             <div class="control-row">
+                <label>Music Volume:</label>
+                <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.3">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * AUDIO ENGINE
+ * Uses Web Audio API to generate sounds without external files.
+ */
+class SoundEngine {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.connect(this.ctx.destination);
+        this.masterGain.gain.value = 0.3;
+        
+        this.isPlaying = false;
+        this.noteIndex = 0;
+        this.nextNoteTime = 0;
+        // Mystery upbeat scale (Minor Pentatonic + extra tension)
+        this.scale = [220, 261.63, 293.66, 311.13, 392.00, 440, 523.25, 587.33]; 
+        this.sequence = [0, 2, 3, 5, 3, 2, 0, -1, 0, 5, 7, 5, 3, 2, 3, 2]; // -1 is rest
+        this.tempo = 0.15; // Seconds per 16th note
+    }
+
+    startMusic() {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        this.isPlaying = true;
+        this.nextNoteTime = this.ctx.currentTime;
+        this.scheduler();
+    }
+
+    stopMusic() {
+        this.isPlaying = false;
+    }
+
+    setVolume(val) {
+        this.masterGain.gain.setTargetAtTime(val, this.ctx.currentTime, 0.1);
+    }
+
+    scheduler() {
+        if (!this.isPlaying) return;
+        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+            this.playNote(this.nextNoteTime);
+            this.nextNoteTime += this.tempo;
+        }
+        setTimeout(() => this.scheduler(), 25);
+    }
+
+    playNote(time) {
+        const noteIdx = this.sequence[this.noteIndex % this.sequence.length];
+        this.noteIndex++;
+        
+        if (noteIdx === -1) return;
+
+        // Bass/Mystery drone
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = 'triangle';
+        osc.frequency.value = this.scale[noteIdx];
+        
+        // Envelope
+        gain.gain.setValueAtTime(0, time);
+        gain.gain.linearRampToValueAtTime(0.3, time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + this.tempo);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start(time);
+        osc.stop(time + this.tempo);
+    }
+
+    playJump() {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.1);
+    }
+
+    playCoin() {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(2000, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.1);
+    }
+
+    playCrash() {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+    }
+}
+
+/**
+ * GAME ENGINE
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const audio = new SoundEngine();
+
+// State
+let gameState = 'MENU'; // MENU, PLAYING, PAUSED, GAMEOVER
+let score = 0;
+let timeLeft = 60;
+let lastTime = 0;
+let gameSpeedMultiplier = 1.0;
+let userSpeedSetting = 1.0;
+let intensity = 0; // Increases with coins
+let particles = [];
+let obstacles = [];
+let coins = [];
+
+// High Scores
+const HIGH_SCORE_KEY = 'neonTriangleScores';
+let highScores = JSON.parse(localStorage.getItem(HIGH_SCORE_KEY)) || [];
+
+// Physics Constants
+let GRAVITY = 1500;
+let JUMP_FORCE = -700;
+const BASE_SPEED = 300; // Pixels per second
+let GRID_ROWS = 5;
+
+// Player Entity
+const player = {
+    x: 50,
+    y: 0,
+    width: 40,
+    height: 40,
+    vy: 0,
+    grounded: true,
+    rotation: 0,
+    color: '#00f3ff'
+};
+
+// Setup Canvas
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    // Ground level is based on the 5-row grid logic
+    // We want the player on the bottom row
+    player.y = canvas.height - (canvas.height / GRID_ROWS) - player.height;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Input Handling
+let jumpPressed = false;
+function jump() {
+    if (gameState !== 'PLAYING') return;
+    if (player.grounded) {
+        player.vy = JUMP_FORCE;
+        player.grounded = false;
+        audio.playJump();
+        // Create particles
+        createParticles(player.x, player.y + player.height, 10, '#fff');
+    }
+}
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') jump();
+    if (e.code === 'Escape') togglePause();
+});
+window.addEventListener('touchstart', (e) => {
+    if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+        e.preventDefault(); 
+        jump();
+    }
+}, {passive: false});
+window.addEventListener('mousedown', (e) => {
+    if(e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') jump();
+});
+
+// Controls
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+document.getElementById('pause-btn').addEventListener('click', togglePause);
+document.getElementById('dashboard-btn').addEventListener('click', toggleDashboard);
+document.getElementById('save-score-btn').addEventListener('click', saveScore);
+document.getElementById('speed-slider').addEventListener('input', (e) => {
+    userSpeedSetting = parseFloat(e.target.value);
+    audio.tempo = 0.15 / userSpeedSetting; // Sync music tempo to speed
+});
+document.getElementById('vol-slider').addEventListener('input', (e) => {
+    audio.setVolume(parseFloat(e.target.value));
+});
+
+function toggleDashboard() {
+    const dashboard = document.getElementById('game-dashboard');
+    dashboard.classList.toggle('hidden');
+}
+
+function togglePause() {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        audio.stopMusic();
+        document.getElementById('pause-btn').innerText = "RESUME";
+        // Show pause overlay (optional, but button change works)
+    } else if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        audio.startMusic();
+        document.getElementById('pause-btn').innerText = "PAUSE";
+        lastTime = performance.now();
+        requestAnimationFrame(loop);
+    }
+}
+
+function startGame() {
+    score = 0;
+    timeLeft = 60;
+    intensity = 0;
+    obstacles = [];
+    coins = [];
+    particles = [];
+    
+    player.y = canvas.height - (canvas.height / GRID_ROWS) - 50;
+    player.vy = 0;
+    player.grounded = false;
+    
+    gameState = 'PLAYING';
+    
+    // UI Updates
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('game-over-screen').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('pause-btn').classList.remove('hidden');
+    document.getElementById('dashboard-btn').classList.remove('hidden');
+    document.getElementById('pause-btn').innerText = "PAUSE";
+    document.getElementById('game-dashboard').classList.add('hidden'); // Ensure dashboard starts hidden
+    
+    updateScoreUI();
+    audio.startMusic();
+    
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    audio.stopMusic();
+    audio.playCrash();
+    
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('pause-btn').classList.add('hidden');
+    document.getElementById('dashboard-btn').classList.add('hidden');
+    document.getElementById('game-over-screen').classList.remove('hidden');
+    
+    document.getElementById('final-score').innerText = score;
+    document.getElementById('go-title').innerText = timeLeft <= 0 ? "TIME UP!" : "CRASHED!";
+
+    // Check High Score
+    const lowestHigh = highScores.length < 5 ? 0 : highScores[highScores.length-1].score;
+    if (score > lowestHigh || highScores.length < 5) {
+        document.getElementById('new-record-section').classList.remove('hidden');
+        document.getElementById('normal-end-section').classList.add('hidden');
+    } else {
+        document.getElementById('new-record-section').classList.add('hidden');
+        document.getElementById('normal-end-section').classList.remove('hidden');
+    }
+}
+
+function saveScore() {
+    const name = document.getElementById('player-name').value || "Unknown";
+    highScores.push({name: name, score: score});
+    highScores.sort((a,b) => b.score - a.score); // Descending
+    highScores = highScores.slice(0, 5); // Keep top 5
+    localStorage.setItem(HIGH_SCORE_KEY, JSON.stringify(highScores));
+    
+    renderHighScores();
+    
+    document.getElementById('new-record-section').classList.add('hidden');
+    document.getElementById('normal-end-section').classList.remove('hidden');
+}
+
+function renderHighScores() {
+    const list = document.getElementById('high-score-display');
+    list.innerHTML = "<h3>HIGH SCORES</h3>";
+    if (highScores.length === 0) list.innerHTML += "<p>No records yet.</p>";
+    highScores.forEach(s => {
+        list.innerHTML += `<div class="score-row"><span>${s.name}</span><span>${s.score}</span></div>`;
+    });
+}
+renderHighScores();
+
+// Game Logic
+function update(dt) {
+    if (gameState !== 'PLAYING') return;
+
+    // Time Management
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+        timeLeft = 0;
+        gameOver();
+        return;
+    }
+    document.getElementById('time-val').innerText = Math.ceil(timeLeft);
+
+    // Speed & Gravity
+    const currentSpeed = BASE_SPEED * userSpeedSetting * (1 + (intensity * 0.05));
+    
+    // Player Physics
+    player.vy += GRAVITY * dt;
+    player.y += player.vy * dt;
+
+    const groundY = canvas.height - (canvas.height / GRID_ROWS) * 1; // Floor is 1 unit up from bottom
+    
+    if (player.y + player.height > groundY) {
+        player.y = groundY - player.height;
+        player.vy = 0;
+        player.grounded = true;
+        player.rotation = 0;
+    } else {
+        player.rotation += 5 * dt; // Spin while jumping
+    }
+
+    // Spawn Logic
+    if (Math.random() < 0.02 * userSpeedSetting) {
+        const type = Math.random() > 0.4 ? 'OBSTACLE' : 'COIN';
+        if (type === 'OBSTACLE') {
+            // Ensure space between obstacles
+            if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 200) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: groundY - 40,
+                    w: 30,
+                    h: 40,
+                    color: '#ff0055'
+                });
+            }
+        } else {
+            // Coin height varies (ground or jump height)
+            const yPos = Math.random() > 0.5 ? groundY - 30 : groundY - 120;
+            coins.push({
+                x: canvas.width,
+                y: yPos,
+                r: 10,
+                collected: false
+            });
+        }
+    }
+
+    // Move & Collide Obstacles
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        let obs = obstacles[i];
+        obs.x -= currentSpeed * dt;
+
+        // Collision AABB
+        if (
+            player.x < obs.x + obs.w &&
+            player.x + player.width > obs.x &&
+            player.y < obs.y + obs.h &&
+            player.y + player.height > obs.y
+        ) {
+            gameOver();
+        }
+
+        if (obs.x + obs.w < 0) obstacles.splice(i, 1);
+    }
+
+    // Move & Collide Coins
+    for (let i = coins.length - 1; i >= 0; i--) {
+        let c = coins[i];
+        c.x -= currentSpeed * dt;
+
+        // Collision Circle-Rect (Approx)
+        let dx = (player.x + player.width/2) - c.x;
+        let dy = (player.y + player.height/2) - c.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist < c.r + player.width/2) {
+            // Collected
+            score += 10;
+            intensity = Math.min(intensity + 1, 10); // Cap intensity
+            updateScoreUI();
+            audio.playCoin();
+            createParticles(c.x, c.y, 15, '#ffd700');
+            coins.splice(i, 1);
+        } else if (c.x < -20) {
+            coins.splice(i, 1);
+        }
+    }
+
+    // Update Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+function updateScoreUI() {
+    document.getElementById('score-val').innerText = score;
+    // Update color theme based on intensity
+    const hue = (180 + intensity * 10) % 360; 
+    player.color = `hsl(${hue}, 100%, 50%)`;
+    document.documentElement.style.setProperty('--primary', player.color);
+}
+
+function createParticles(x, y, count, color) {
+    for(let i=0; i<count; i++) {
+        particles.push({
+            x: x, 
+            y: y,
+            vx: (Math.random() - 0.5) * 200,
+            vy: (Math.random() - 0.5) * 200,
+            life: 0.5,
+            color: color
+        });
+    }
+}
+
+function draw() {
+    // Clear
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Grid (The "5 by grid" visual)
+    const rowHeight = canvas.height / GRID_ROWS;
+    
+    // Horizontal Lines
+    ctx.strokeStyle = `rgba(0, 243, 255, ${0.1 + (intensity * 0.02)})`;
+    ctx.lineWidth = 1;
+    for(let i=0; i<=GRID_ROWS; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, i * rowHeight);
+        ctx.lineTo(canvas.width, i * rowHeight);
+        ctx.stroke();
+    }
+
+    // Vertical Moving Lines (Perspective Effect)
+    const speedOffset = (Date.now() * 0.1 * userSpeedSetting) % 100;
+    for(let i=0; i < canvas.width + 100; i+= 100) {
+        let xPos = i - speedOffset;
+        ctx.beginPath();
+        ctx.moveTo(xPos, 0);
+        ctx.lineTo(xPos, canvas.height);
+        ctx.stroke();
+    }
+
+    // Draw Ground Line (Heavier)
+    const groundY = canvas.height - rowHeight;
+    ctx.strokeStyle = player.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(canvas.width, groundY);
+    ctx.stroke();
+
+    // Draw Player (Triangle)
+    ctx.save();
+    ctx.translate(player.x + player.width/2, player.y + player.height/2);
+    ctx.rotate(player.rotation);
+    ctx.fillStyle = player.color;
+    ctx.shadowBlur = 15 + intensity;
+    ctx.shadowColor = player.color;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, -player.height/2);
+    ctx.lineTo(player.width/2, player.height/2);
+    ctx.lineTo(-player.width/2, player.height/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Draw Obstacles
+    ctx.fillStyle = '#ff0055';
+    ctx.shadowColor = '#ff0055';
+    obstacles.forEach(obs => {
+        ctx.shadowBlur = 10;
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        // Add "Danger" outline
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+    });
+
+    // Draw Coins
+    ctx.fillStyle = '#ffd700';
+    ctx.shadowColor = '#ffd700';
+    coins.forEach(c => {
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fill();
+        // Shine effect
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(c.x - 3, c.y - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffd700';
+    });
+
+    // Draw Particles
+    particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life / 0.5;
+        ctx.fillRect(p.x, p.y, 3, 3);
+    });
+    ctx.globalAlpha = 1.0;
+}
+
+function loop(timestamp) {
+    if (gameState === 'PAUSED') return;
+    
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // Cap dt
+    lastTime = timestamp;
+
+    update(dt);
+    draw();
+
+    if (gameState === 'PLAYING') {
+        requestAnimationFrame(loop);
+    }
+}
+
+// Initial Draw for background
+draw();
+
+</script>
+</body>
+</html>

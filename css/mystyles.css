@@ -1,0 +1,22 @@
+body{
+    font-family: 'comic sans ms', cursive, sans-serif;
+    background-color:lightblue;
+}
+h1, h2, h3, h4, h5, h6 , p{
+    font-family: 'comic sans ms', cursive, sans-serif;
+    color: #000;
+}
+a{
+    font-family: 'comic sans ms', cursive, sans-serif;
+}
+.CSFont{
+    font-family: 'comic sans ms', cursive, sans-serif !important;
+}
+ol
+{
+    font-family: 'Times New Roman', Times, serif;
+}
+.soccerThing{
+    font-family: 'Arial Black', Gadget, sans-serif;
+    text-align: center;
+}
